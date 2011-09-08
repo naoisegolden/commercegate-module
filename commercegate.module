@@ -1,0 +1,485 @@
+<?php
+
+
+/**
+* Display help and module information
+* @param path which path of the site we're displaying help
+* @param arg array that holds the current path as would be returned from arg() function
+* @return help text for the path
+*/
+function commercegate_help($path, $arg) {
+  $output = '';  //declare your output variable
+  switch ($path) {
+    case "admin/help#commercegate":
+      $output = '<p>'.  t("Tools that work with the CommerceGate payment system") .'</p>';
+      break;
+    case "admin/settings#commercegate":
+      $output = '<p>'. t("Your callback server is located in the module_folder/callback/server.php") .'</p>';
+      break;
+  }
+  return $output;
+} // function onthisdate_help
+
+/**
+* Admin page for the module
+*/
+function commercegate_admin() {
+  $form = array();
+
+  $form['commercegate_cid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Account ID'),
+    '#default_value' => variable_get('commercegate_cid', ''),
+    '#size' => 10,
+    '#maxlength' => 10,
+    '#description' => t("CommerceGate account ID."),
+    '#required' => TRUE,
+  );
+  $form['commercegate_wid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Website ID'),
+    '#default_value' => variable_get('commercegate_wid', ''),
+    '#size' => 10,
+    '#maxlength' => 10,
+    '#description' => t("Website ID in CommerceGate configuration."),
+    '#required' => TRUE,
+  );
+  $form['commercegate_packid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Package ID'),
+    '#default_value' => variable_get('commercegate_packid', ''),
+    '#size' => 10,
+    '#maxlength' => 10,
+    '#description' => t("Package ID in CommerceGate configuration."),
+    '#required' => FALSE,
+  );
+  $form['commercegate_email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Notification email'),
+    '#default_value' => variable_get('commercegate_email', ''),
+    '#size' => 30,
+    '#maxlength' => 64,
+    '#description' => t("Email to which send the notifications."),
+    '#required' => TRUE,
+  );
+  $form['commercegate_linktext'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Text in link'),
+    '#default_value' => variable_get('commercegate_linktext', ''),
+    '#size' => 30,
+    '#maxlength' => 64,
+    '#description' => t("Link text for the CommerceGate block."),
+    '#required' => TRUE,
+  );
+  $form['commercegate_sendemail'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send user email'),
+    '#return_value' => 1,
+    '#default_value' => variable_get('commercegate_sendemail', 0),
+    '#description' => t("Send logged user's email to Payment Page?"),
+    '#required' => TRUE,
+  );
+  $form['commercegate_sendname'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send username'),
+    '#return_value' => 1,
+    '#default_value' => variable_get('commercegate_sendname', 0),
+    '#description' => t("Send logged user's username to Payment Page?"),
+    '#required' => TRUE,
+  );
+  $form['commercegate_sendpassword'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send user password'),
+    '#return_value' => 1,
+    '#default_value' => variable_get('commercegate_sendpassword', 0),
+    '#description' => t("Send logged user's password (hashed) to Payment Page?"),
+    '#required' => TRUE,
+  );
+  $form['commercegate_sendlanguage'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send user language setting'),
+    '#return_value' => 1,
+    '#default_value' => variable_get('commercegate_sendlanguage', 0),
+    '#description' => t("Send logged user's language setting to Payment Page?"),
+    '#required' => TRUE,
+  );
+  $form['commercegate_checkip'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Check remote IP'),
+    '#return_value' => 1,
+    '#default_value' => variable_get('commercegate_checkip', 0),
+    '#description' => t("Only accept callbacks from CommerceGate's IPs? (recommended)"),
+    '#required' => TRUE,
+  );
+
+  return system_settings_form($form);
+}// function commercegate_admin()
+
+/**
+* Validate de input data from admin page
+*/
+function commercegate_admin_validate($form, &$form_state) {
+  $cid = $form_state['values']['commercegate_cid'];
+  if (!is_numeric($cid)) {
+    form_set_error('commercegate_cid', t('Account ID must be a number.'));
+  }
+}// function commercegate_admin_validate()
+
+/**
+ * Implementation of hook_menu()
+ */
+function commercegate_menu() {
+
+  $items = array();
+	
+  // añadir al menú de administración la página de settings del modulo
+  $items['admin/settings/commercegate'] = array(
+    'title' => t('CommerceGate'),
+    'description' => t('Configuration settings for module CommerceGate'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('commercegate_admin'),
+    'access' => user_access('administer commercegate'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM,
+   );
+   
+  // crear una url para acceder al callback server
+  $items['commercegate/callbackserver'] = array( 
+    'title' => t('Callback server'),
+    'description' => t('URL that triggers the callback server, to be called from CommerceGate servers'),
+    'type' => MENU_CALLBACK,
+    'page callback' => 'callback_server',
+    //'access' => user_access('commercegate server access'),
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}// function commercegate_menu()
+
+function callback_server () {
+	
+  	module_invoke_all('exit');
+	//comprovamos que la llamada viene de una IP de CommerceGate
+    $checkip = variable_get('commercegate_checkip', 0);
+    $ips = array(
+		'195.10.21.3',
+		'195.10.21.4',
+		'195.10.21.5',
+		'195.10.21.12',
+		'195.10.38.130',
+		'195.10.38.131',
+		'195.10.38.132',
+		'195.10.38.133',
+		'195.10.38.134',
+		'195.10.38.135',
+		'195.10.38.136',
+		'195.10.38.137',
+		'195.10.38.138',
+		'195.10.38.139',
+		'195.10.38.140'
+	);
+	$ip=$_SERVER['REMOTE_ADDR'];
+	if($checkip && !in_array($ip,$ips)){
+		watchdog('commercegate', 'Unauthorized IP address %ip tried to access /commercegate/callbackserver.', array('%ip'=>$ip), WATCHDOG_ALERT);
+		drupal_set_message(t('You are not authorized to acces this address.'),'error', false);
+	    drupal_not_found();
+	    exit(); 
+	}	
+	
+  	// Parse $_REQUEST parameters
+  	$array=split("#",$_REQUEST['message']);
+	$cb= new stdClass;
+	$cb->transactiontype=$array[0];
+	$cb->transactionid=$array[1];
+	$cb->transactionreferenceid=$array[2];
+	$cb->offername=$array[3];
+	$cb->offerid=$array[4];
+	$cb->amount=$array[5];
+	$cb->currency=$array[6];
+	$cb->userid=$array[7];
+	$cb->userpw=$array[8];
+	$cb->email=$array[9];
+	$cb->ip=$array[10];
+	$cb->countryiso=$array[11];
+	$cb->cardholder=$array[12];
+	$cb->customerid=$array[13];
+	$cb->websiteid=$array[14];
+	$cb->op1=$array[15];
+	$cb->op2=$array[16];
+	$cb->op3=$array[17];
+	$cb->nmu=$array[18];
+	$cb->date= date( 'Y-m-d H:i:s'); 
+	
+	//check transaction type
+	switch ($cb->transactiontype) {
+		case "SALE": // insert the user.
+			_commercegate_invoke_callback_trigger('callback_sale', $cb);
+			break;
+		case "REBILL": // Rebill user
+			_commercegate_invoke_callback_trigger('callback_rebill', $cb);
+			break;
+		case "UPSELL": // Upsell user
+			_commercegate_invoke_callback_trigger('callback_upsell', $cb);
+			break;
+		case "REFUND": // refund user
+			_commercegate_invoke_callback_trigger('callback_refund', $cb);
+			break;
+		case "CHARGEBACK": // chargeback  user
+			_commercegate_invoke_callback_trigger('callback_chargeback', $cb);
+			break;
+		default:
+			echo "unsupported callback type";
+			watchdog('commercegate', 'Unsupported callback type', null , WATCHDOG_ERROR);
+			exit();
+			break;
+	}
+
+	$log = "User ".$cb->userid." did a ".$cb->transactiontype." transaction of ".$cb->amount." ".$cb->currency.". Offer: ".$cb->offername;
+	watchdog('commercegate', $log, null , WATCHDOG_INFO);
+
+  	echo 'success';
+  	exit();
+}
+
+/**
+ * Callback for trigger that fires actions assigned to him on every page request
+ */
+function _commercegate_invoke_callback_trigger($callback = '', $cb) {
+	if( $callback == '' || empty($cb) ) exit();
+	// Invoke all actions for this trigger
+	module_invoke_all('commercegate', $callback, $cb);
+}
+
+/**
+* Valid permissions for this module
+* @return array An array of valid permissions for the onthisdate module
+*/
+function commercegate_perm() {
+  return array('access commercegate content','administer commercegate');
+} // function onthisdate_perm()
+
+/**
+ * Implementation of hook_mail()
+ */
+function commercegate_mail ($key, &$message, $params) {
+	
+	$transactiontype 	= $params['transactiontype'];
+	$transactionid 		= $params['transactionid'];
+	$transactionreferenceid = $params['transactionreferenceid'];
+	$offername 			= $params['offername'];
+	$offerid 			= $params['offerid'];
+	$amount 			= $params['amount'];
+	$currency 			= $params['currency'];
+	$userid 			= $params['userid'];
+	$userpw 			= $params['userpw'];
+	$email 				= $params['email'];
+	$ip 				= $params['ip'];
+	$countryiso 		= $params['countryiso'];
+	$cardholder 		= $params['cardholder'];
+	$customerid 		= $params['customerid'];
+	$websiteid 			= $params['websiteid'];
+	$op1 				= $params['op1'];
+	$op2 				= $params['op2'];
+	$op3 				= $params['op3'];
+	$nmu 				= $params['nmu'];
+	$date 				= $params['date'];
+	
+	$body = "Notification of CommerceGate transaction from site id $websiteid:\n\n";
+	$body .= "Transaction type: $transactiontype\n";
+	$body .= "Transaction reference ID: $transactionreferenceid\n";
+	$body .= "Offer name: $offername\n";
+	$body .= "Amount: $amount $currency\n";
+	$body .= "User ID: $userid\n";
+	$body .= "User email: $email\n";
+	$body .= "Country: $countryiso\n";
+	$body .= "Cardholder: $cardholder\n";
+	$body .= "Customer ID: $customerid\n";
+	$body .= "Date: $date\n";
+	
+  	switch ($key) {
+    	case 'notification':
+	      	// Set headers etc
+	      	$message['subject'] = "Notification of CommerceGate transaction (user: $userid)";
+	      	$message['body'] = $body;
+	      	break;
+  	}
+}
+
+
+/**
+* Generate HTML for the CommerceGate block
+* @param op the operation from the URL
+* @param delta offset
+* @returns block HTML
+*/
+function commercegate_block($op='list', $delta=0) {
+  // set up the block 
+  $block = array();
+
+  if ($op == "list") {
+    // Generate listing of blocks from this module, for the admin/block page
+
+    $block[0]["info"] = t('CommerceGate link block');
+  }
+  else if ($op == 'view') {
+
+    // Generate our block content
+    // Variables from admin page
+    $cid = variable_get('commercegate_cid', '');
+    $wid = variable_get('commercegate_wid', '');
+    $packid = variable_get('commercegate_packid', '');
+    $sendemail = variable_get('commercegate_sendemail', 0);
+    $sendname = variable_get('commercegate_sendname', 0);
+    $sendpassword = variable_get('commercegate_sendpassword', 0);
+    $sendlanguage = variable_get('commercegate_sendlanguage', 0);
+    // User variables
+    global $user;
+	$mail = $user->mail;
+	$name = $user->name;
+	$pass = $user->pass;
+	$lang = $user->language;
+
+    // content variable that will be returned for display
+	$block_content = '<a href="https://secure.commercegate.com/payment/ccform.php?cid='.$cid.'&wid='.$wid;
+	
+	if($packid!='') 	$block_content .= '&packid='.$packid;
+	if($sendemail) 		$block_content .= '&email='.$mail;
+	if($sendname) 		$block_content .= '&username='.$name;
+	if($sendpassword) 	$block_content .= '&password='.$pass;
+	if($sendlanguage) 	$block_content .= '&lang='.$lang;
+	
+	$block_content .= '" title="Link" target="_blank">'.t(variable_get('commercegate_linktext', 'Link')).'</a>';
+
+    // check to see if there was any content before returning
+    //  the block view
+    if ($block_content == '') {  
+       // no content from a week ago
+       $block['content'] = 'Sorry No Content';
+    }
+    else {
+      // set up the block
+      $block['content'] = $block_content;
+    }
+  }
+
+  return $block;
+}  // end commercegate_block
+
+
+/** TRIGGERS (from http://drupal.org/node/375833) */
+// Transaction types: sale, rebill, upsell, refund, cargeback.
+
+/**
+* Implementation of hook_hook_info().
+*/
+function commercegate_hook_info() {
+	return array(
+		'commercegate' => array(
+			'commercegate' => array(
+				'callback_sale' => array(
+					'runs when' => t('The CommerceGate server calls our callback server with SALE transaction type'),
+				),
+				'callback_rebill' => array(
+					'runs when' => t('The CommerceGate server calls our callback server with REBILL transaction type'),
+				),
+				'callback_upsell' => array(
+					'runs when' => t('The CommerceGate server calls our callback server with UPSELL transaction type'),
+				),
+				'callback_refund' => array(
+					'runs when' => t('The CommerceGate server calls our callback server with REFUND transaction type'),
+				),
+				'callback_cargeback' => array(
+					'runs when' => t('The CommerceGate server calls our callback server with CARGEBACK transaction type'),
+				),
+			),
+		),
+	);
+}  // end commercegate_hook_info
+
+/**
+* Implementation of hook_trigger_name().
+*/
+function commercegate_commercegate($op, $cb) {
+	// We support a subset of operations.
+	if (!in_array($op, array('callback_sale','callback_rebill','callback_upsell','callback_refund','callback_cargeback'))) {
+		return;
+	}
+	$aids = _trigger_get_hook_aids('commercegate', $op);
+	$context = array(
+		'hook' 				=> 'commercegate',
+		'op' 				=> $op,
+		'transactiontype' 	=> $cb->transactiontype,
+		'transactionid' 	=> $cb->transactionid,
+		'transactionreferenceid' => $cb->transactionreferenceid,
+		'offername' 		=> $cb->offername,
+		'offerid' 			=> $cb->offerid,
+		'amount' 			=> $cb->amount,
+		'currency' 			=> $cb->currency,
+		'userid' 			=> $cb->userid,
+		'userpw' 			=> $cb->userpw,
+		'email' 			=> $cb->email,
+		'ip' 				=> $cb->ip,
+		'countryiso' 		=> $cb->countryiso,
+		'cardholder' 		=> $cb->cardholder,
+		'customerid' 		=> $cb->customerid,
+		'websiteid' 		=> $cb->websiteid,
+		'op1' 				=> $cb->op1,
+		'op2' 				=> $cb->op2,
+		'op3' 				=> $cb->op3,
+		'nmu' 				=> $cb->nmu,
+		'date' 				=> $cb->date, 
+	);
+	actions_do(array_keys($aids), $user, $context);
+} // end commercegate_commercegate()
+
+/**
+* Implementation of hook_menu_alter().
+*
+*/
+function commercegate_menu_alter(&$callbacks) {
+  if (module_exists('trigger') & isset($callbacks['admin/build/trigger/commercegate'])) {
+    $callbacks['admin/build/trigger/commercegate']['access callback'] = 'trigger_access_check';
+  }
+}
+
+
+/** ACTIONS http://drupal.org/node/172152 http://drupal.org/node/438732 */
+
+/**
+ * Implementation of hook_action_info().
+ */
+function commercegate_action_info() {
+	return array(
+		'commercegate_custom_action' => array(
+			'description' => t('CommerceGate module custom action.'),
+			'type' => 'commercegate',
+			'configurable' => false,
+			'hooks' => array(
+				'commercegate' => array('callback_sale','callback_rebill','callback_upsell','callback_refund','callback_cargeback'),
+			)
+		),
+	);
+}
+
+/**
+ * Action callback function
+ */
+function commercegate_custom_action(&$object,$context) {
+	//aqui iria el código para un custom action para este modulo
+	//por ejemplo publicar el anuncio del usuario que ha pagado
+	//por ahora lo que hace es enviar un email de notificación
+	$to = variable_get('commercegate_email', '');
+	if($to == '') {
+		watchdog('commercegate', 'Notification email not sent because no email address was given (go to <a href="admin/settings/commercegate">settings</a>).', array(), WATCHDOG_ALERT);
+		exit();
+	}
+	
+	global $language;
+	$lang = $language->language;
+	
+	drupal_mail('commercegate', 'notification', $to, $lang, $context);
+	watchdog('commercegate', 'Notification email sent to %to.', array('%to'=>$to), WATCHDOG_NOTICE);
+
+}
+
+?>

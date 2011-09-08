@@ -1,0 +1,5 @@
+name = CommerceGate
+description = A module for the CommerceGate payment system.
+core = 6.x
+package = "E-Commerce"
+dependencies[] = trigger
