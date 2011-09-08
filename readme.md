@@ -24,12 +24,15 @@ Each trigger, action and event generates a log in the System Log.
 In your CommerceGate account, you must provide the following setting for your site's Gateway Configuration:
 
 Callback URL: `http://yoursite.com/commercegate/callbackserver`
-Callback Type: String
+
+Callback Type: `String`
 
 The rest of options are at your choice, since they can be configured in the module settings.
 
 ### Configuration
 
 To configure the module go to: `admin/settings/commercegate` 
+
 To configure triggers go to: `admin/build/trigger/commercegate` 
+
 To see the reports go to: `admin/reports/dblog/commercegate` 
