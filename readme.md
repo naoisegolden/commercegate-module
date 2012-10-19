@@ -37,6 +37,6 @@ To configure triggers go to: `admin/build/trigger/commercegate`
 
 To see the reports go to: `admin/reports/dblog/commercegate` 
 
-## Endorse me
+### Endorse me
 
 [![endorse](http://api.coderwall.com/naoise/endorsecount.png)](http://coderwall.com/naoise)
