@@ -36,3 +36,7 @@ To configure the module go to: `admin/settings/commercegate`
 To configure triggers go to: `admin/build/trigger/commercegate` 
 
 To see the reports go to: `admin/reports/dblog/commercegate` 
+
+## Endorse me
+
+[![endorse](http://api.coderwall.com/naoise/endorsecount.png)](http://coderwall.com/naoise)
